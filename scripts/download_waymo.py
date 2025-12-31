@@ -94,26 +94,50 @@ def check_gsutil() -> bool:
 
 def list_gcs_files(bucket_path: str, pattern: str = "") -> List[str]:
     """List files in a GCS bucket path."""
-    cmd = ["gsutil", "ls", f"{bucket_path}{pattern}"]
+    full_path = f"{bucket_path}{pattern}" if pattern else bucket_path
+    cmd = ["gsutil", "ls", full_path]
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
+        # Log the error for debugging
+        logger = logging.getLogger(__name__)
+        if result.stderr:
+            logger.debug(f"gsutil error: {result.stderr.strip()}")
         return []
     return [f.strip() for f in result.stdout.strip().split("\n") if f.strip()]
 
 
 def get_sequence_ids(bucket: str, split: str, version: str = "v2") -> List[str]:
     """Get unique sequence IDs from a Waymo dataset split."""
+    logger = logging.getLogger(__name__)
+    
     if version == "v2":
+        # For v2, list parquet files in lidar folder
         path = f"gs://{bucket}/{split}/lidar/"
-        files = list_gcs_files(path)
+        logger.debug(f"Listing: {path}")
         
+        files = list_gcs_files(path)
+        logger.debug(f"Found {len(files)} items in lidar/")
+        
+        if not files:
+            # Check if we can access the bucket at all
+            test_path = f"gs://{bucket}/"
+            test_files = list_gcs_files(test_path)
+            if not test_files:
+                logger.warning(f"Cannot access bucket gs://{bucket}/ - check authentication")
+            else:
+                logger.debug(f"Bucket accessible, found: {test_files[:3]}...")
+            return []
+        
+        # Extract sequence IDs from filenames
         sequence_ids = set()
         for f in files:
-            name = Path(f).stem
-            if "segment-" in name or name.endswith(".parquet"):
-                # Extract segment ID from filename
+            name = Path(f).name.rstrip("/")
+            if name.endswith(".parquet"):
                 seq_id = name.replace(".parquet", "")
                 sequence_ids.add(seq_id)
+            elif name:
+                # Could be a folder name
+                sequence_ids.add(name)
         
         return sorted(list(sequence_ids))
     else:
@@ -394,6 +418,7 @@ Note: Requires gsutil with Waymo dataset access.
     logger.info("=" * 60)
     
     # Download each split
+    errors_occurred = False
     for split in args.splits:
         count = split_counts.get(split)
         
@@ -406,7 +431,13 @@ Note: Requires gsutil with Waymo dataset access.
             available = get_sequence_ids(bucket, split, args.version)
             
             if not available:
-                logger.error(f"Failed to retrieve sequences for {split}. Check gsutil authentication.")
+                errors_occurred = True
+                logger.error(f"Failed to retrieve sequences for {split}.")
+                logger.error("  Possible causes:")
+                logger.error("    1. Not authenticated: run 'gcloud auth login'")
+                logger.error("    2. No Waymo access: accept license at https://waymo.com/open/terms/")
+                logger.error("    3. In Colab: run 'from google.colab import auth; auth.authenticate_user()'")
+                logger.error("  Use --verbose flag for debug info")
                 continue
             
             logger.info(f"  Found {len(available)} sequences available")
@@ -423,6 +454,10 @@ Note: Requires gsutil with Waymo dataset access.
             downloaded = download_sequences(
                 selected, output_dir, split, bucket, components, args.version, logger
             )
+            logger.info(f"Completed {split}: {downloaded} files")
+    
+    if errors_occurred:
+        logger.warning("\nSome splits failed to download. See errors above.")
             logger.info(f"Completed {split}: {downloaded} files")
     
     # Save download info
