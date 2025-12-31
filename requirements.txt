@@ -6,7 +6,7 @@ scipy>=1.10.0
 
 # Waymo Open Dataset
 waymo-open-dataset-tf-2-12-0>=1.6.0
-tensorflow>=2.12.0,<2.16.0  # Required for Waymo dataset parsing
+tensorflow>=2.16.0  # Required for Waymo dataset parsing (2.16+ for Python 3.12 support)
 
 # Data processing
 pyarrow>=14.0.0

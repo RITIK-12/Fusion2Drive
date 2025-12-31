@@ -38,7 +38,7 @@ dependencies = [
 [project.optional-dependencies]
 waymo = [
     "waymo-open-dataset-tf-2-12-0>=1.6.0",
-    "tensorflow>=2.12.0,<2.16.0",
+    "tensorflow>=2.16.0",
     "pyarrow>=14.0.0",
     "pandas>=2.0.0",
 ]
