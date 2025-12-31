@@ -1,0 +1,104 @@
+# Fusion2Drive CARLA Simulation Configuration
+
+# CARLA server settings
+server:
+  host: localhost
+  port: 2000
+  timeout: 30.0
+
+# World settings
+world:
+  map_name: Town03  # Town01-Town10 available
+  weather: ClearNoon  # ClearNoon, CloudyNoon, WetNoon, HardRainNoon, etc.
+  fixed_delta_seconds: 0.05  # 20 Hz simulation
+
+# Ego vehicle settings
+ego_vehicle:
+  blueprint: vehicle.tesla.model3
+  spawn_point_index: null  # Random if null
+
+# Sensor configuration (matching Waymo)
+sensors:
+  cameras:
+    num_cameras: 5
+    width: 1920
+    height: 1280
+    fov: 70
+    
+    # Camera positions
+    positions:
+      FRONT:
+        location: [2.0, 0.0, 1.5]
+        rotation: [0, 0, 0]
+      FRONT_LEFT:
+        location: [1.5, -0.8, 1.5]
+        rotation: [0, -45, 0]
+      FRONT_RIGHT:
+        location: [1.5, 0.8, 1.5]
+        rotation: [0, 45, 0]
+      SIDE_LEFT:
+        location: [0.0, -1.0, 1.5]
+        rotation: [0, -90, 0]
+      SIDE_RIGHT:
+        location: [0.0, 1.0, 1.5]
+        rotation: [0, 90, 0]
+  
+  lidar:
+    channels: 64
+    range: 75.0
+    points_per_second: 2200000
+    rotation_frequency: 20.0
+    upper_fov: 3.0
+    lower_fov: -25.0
+    location: [0.0, 0.0, 2.4]
+
+# Traffic settings
+traffic:
+  num_vehicles: 50
+  num_pedestrians: 30
+  vehicle_autopilot: true
+
+# Controller settings
+controller:
+  type: pure_pursuit  # "pure_pursuit", "pid", or "mpc"
+  
+  pure_pursuit:
+    lookahead_distance: 5.0
+    min_lookahead: 2.0
+    max_lookahead: 15.0
+    lookahead_gain: 0.3
+    wheelbase: 2.9
+    max_steer: 0.5
+    target_speed: 10.0  # m/s (~36 km/h)
+    
+  pid:
+    kp_lateral: 0.5
+    ki_lateral: 0.01
+    kd_lateral: 0.1
+    kp_heading: 1.0
+    target_speed: 10.0
+    
+  mpc:
+    horizon: 10
+    dt: 0.1
+    target_speed: 10.0
+
+# Simulation settings
+simulation:
+  max_steps: 2000  # ~100 seconds at 20 Hz
+  target_fps: 10.0  # Model inference frequency
+  
+# Recording settings
+recording:
+  enabled: false
+  output_dir: recordings
+
+# Evaluation metrics
+evaluation:
+  compute_collisions: true
+  compute_route_completion: true
+  compute_infraction_score: true
+
+# Rendering
+render: true
+spectator_follow: true

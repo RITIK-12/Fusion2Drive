@@ -1,0 +1,84 @@
+# Fusion2Drive Training Configuration - Full Scale
+# For A100 80GB GPU training on full Waymo dataset
+
+# Data configuration
+data:
+  data_dir: /data/waymo  # Path to Waymo Open Dataset v2
+  cache_dir: /data/waymo_cache  # Preprocessed cache directory
+  batch_size: 4  # Per GPU batch size
+  num_workers: 8
+  image_size: [256, 704]  # H, W
+  max_points: 150000
+  augment: true
+
+# Model configuration
+model:
+  use_lidar: true
+  use_camera: true
+  lidar_channels: 64
+  camera_channels: 64
+  camera_backbone: efficientnet_b0  # efficientnet_b0, ijepa_base, convnext_tiny
+  bev_channels: 256
+  bev_size: [200, 200]  # 0.5m resolution, 100m x 100m
+  bev_expand_ratio: 4.0  # MBConv expansion ratio
+  bev_se_ratio: 0.25  # Squeeze-excitation ratio
+  num_classes: 3  # vehicle, pedestrian, cyclist
+  num_waypoints: 12  # 6 seconds at 2 Hz
+  dropout: 0.1
+
+# Training configuration
+trainer:
+  max_epochs: 50
+  learning_rate: 1.0e-4
+  weight_decay: 0.01
+  gradient_accumulation_steps: 4  # Effective batch size = 16
+  mixed_precision: true
+  clip_grad_norm: 1.0
+  warmup_epochs: 5
+  log_interval: 100
+  save_interval: 1
+  checkpoint_dir: checkpoints
+
+# Loss weights
+loss:
+  detection_weight: 1.0
+  planning_weight: 1.0
+  use_uncertainty_weighting: true
+  
+  # Detection loss
+  heatmap_weight: 1.0
+  regression_weight: 0.5
+  heading_weight: 0.2
+  focal_alpha: 0.25
+  focal_gamma: 2.0
+  
+  # Planning loss
+  l1_weight: 1.0
+  heading_weight: 0.5
+  collision_weight: 0.1
+
+# Optimizer
+optimizer:
+  name: adamw
+  betas: [0.9, 0.999]
+  eps: 1.0e-8
+
+# Learning rate scheduler
+scheduler:
+  name: cosine
+  warmup_epochs: 5
+  min_lr: 1.0e-6
+
+# Logging
+log_dir: outputs/train_full
+tensorboard: true
+wandb: false  # Set to true and configure wandb_project
+
+# Distributed training
+distributed:
+  enabled: false  # Set to true for multi-GPU
+  backend: nccl
+  
+# Debug
+debug: false
+profile: false

@@ -1,0 +1,61 @@
+# Fusion2Drive Training Configuration - Tiny (Debug/Test)
+# For quick iteration and debugging on smaller dataset
+
+# Data configuration
+data:
+  data_dir: /data/waymo  # Path to Waymo Open Dataset v2
+  cache_dir: /data/waymo_cache
+  batch_size: 2
+  num_workers: 4
+  image_size: [128, 352]  # Smaller images for faster training
+  max_points: 50000  # Fewer points
+  augment: false  # Disable augmentation for reproducibility
+
+# Model configuration (smaller)
+model:
+  use_lidar: true
+  use_camera: true
+  lidar_channels: 32  # Reduced
+  camera_channels: 32  # Reduced
+  camera_backbone: efficientnet_b0  # Use EfficientNet (lighter than ijepa)
+  bev_channels: 128  # Reduced
+  bev_size: [100, 100]  # Smaller BEV
+  bev_expand_ratio: 2.0  # Smaller expansion for faster training
+  bev_se_ratio: 0.25
+  num_classes: 3
+  num_waypoints: 8  # Shorter horizon
+  dropout: 0.0
+
+# Training configuration
+trainer:
+  max_epochs: 5
+  learning_rate: 1.0e-3  # Higher LR for quick convergence
+  weight_decay: 0.0
+  gradient_accumulation_steps: 1
+  mixed_precision: false  # Disable for debugging
+  clip_grad_norm: 1.0
+  warmup_epochs: 1
+  log_interval: 10
+  save_interval: 1
+  checkpoint_dir: checkpoints/tiny
+
+# Loss weights
+loss:
+  detection_weight: 1.0
+  planning_weight: 1.0
+  use_uncertainty_weighting: false
+
+# Logging
+log_dir: outputs/train_tiny
+tensorboard: true
+wandb: false
+
+# Debug mode
+debug: true
+profile: false
+
+# Subset for quick testing
+subset:
+  enabled: true
+  train_samples: 100
+  val_samples: 20

@@ -1,0 +1,64 @@
+# Fusion2Drive Evaluation Configuration
+
+# Data configuration
+data:
+  data_dir: /data/waymo
+  cache_dir: /data/waymo_cache
+  batch_size: 1  # Single sample for accurate timing
+  num_workers: 4
+  image_size: [256, 704]
+  max_points: 150000
+  augment: false
+
+# Model configuration (should match training)
+model:
+  use_lidar: true
+  use_camera: true
+  lidar_channels: 64
+  camera_channels: 64
+  camera_backbone: efficientnet_b0  # Must match trained model
+  bev_channels: 256
+  bev_size: [200, 200]
+  bev_expand_ratio: 4.0
+  bev_se_ratio: 0.25
+  num_classes: 3
+  num_waypoints: 12
+
+# Evaluation configuration
+eval:
+  # Detection thresholds
+  score_threshold: 0.3
+  nms_threshold: 0.5
+  
+  # IoU thresholds for mAP
+  iou_thresholds:
+    - 0.5
+    - 0.7
+  
+  # Per-class distance ranges (Waymo style)
+  distance_ranges:
+    - [0, 30]
+    - [30, 50]
+    - [50, 75]
+  
+  # Class names
+  class_names:
+    - vehicle
+    - pedestrian
+    - cyclist
+  
+  # Planning evaluation
+  planning:
+    horizon_seconds: 6.0
+    frequency_hz: 2.0
+    
+  # Collision proxy
+  collision:
+    ego_length: 4.8
+    ego_width: 1.8
+    safety_margin: 0.5
+
+# Output
+output_dir: outputs/eval
+save_predictions: false  # Save all predictions for analysis
+save_visualizations: false  # Save visualization images

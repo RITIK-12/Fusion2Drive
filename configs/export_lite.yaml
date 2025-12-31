@@ -1,0 +1,48 @@
+# Fusion2Drive Export Configuration - Lite Model for Mac
+
+# Export settings
+export:
+  # Batch size for export (usually 1 for inference)
+  batch_size: 1
+  
+  # Input dimensions
+  num_cameras: 5
+  image_size: [256, 704]  # H, W
+  max_points: 150000
+  
+  # BEV grid
+  bev_size: [200, 200]
+  
+  # ONNX settings
+  onnx:
+    opset_version: 17
+    dynamic_batch: false
+    simplify: true
+    quantize: false  # Set to true for INT8 quantization
+  
+  # TorchScript settings
+  torchscript:
+    method: trace  # or "script"
+    optimize_for_mobile: true
+  
+  # CoreML settings (for Apple Silicon)
+  coreml:
+    convert_to_mlpackage: true  # Use newer .mlpackage format
+    compute_precision: float16  # or float32
+    minimum_ios_version: "16.0"
+
+# Model configuration for lite export
+model:
+  camera_backbone: efficientnet_b0  # Lightweight backbone for mobile
+  bev_expand_ratio: 2.0  # Reduced for faster inference
+  bev_se_ratio: 0.25
+  use_fused_mbconv: true  # Use fused ops for efficiency
+
+# Model mode
+mode: fusion  # "fusion", "lidar_only", or "camera_only"
+
+# Optimization
+optimize_for_mobile: true
+
+# Output
+output_dir: exports/lite
