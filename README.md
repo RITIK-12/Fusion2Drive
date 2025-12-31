@@ -66,15 +66,34 @@ uv pip install -r requirements.txt
 uv pip install -e .
 ```
 
-### 2. Download Waymo Data (Tiny Subset for Testing)
+### 2. Download Waymo Data
 
 ```bash
-# Download 50 segments for quick validation (~10GB)
-python scripts/download_waymo.py --subset tiny --output-dir data/waymo
+# Download 500 train, 150 val, 50 test sequences (medium preset - recommended)
+python scripts/download_waymo.py --output-dir data/waymo --subset medium
 
-# Or download full training set (~1TB)
-python scripts/download_waymo.py --subset full --output-dir data/waymo
+# Custom counts per split
+python scripts/download_waymo.py --output-dir data/waymo \
+    --num-train 500 --num-val 200 --num-test 100
+
+# Quick testing (tiny preset)
+python scripts/download_waymo.py --output-dir data/waymo --subset tiny
+
+# Download full training split only
+python scripts/download_waymo.py --output-dir data/waymo --subset full --splits training
+
+# Download all official splits (full dataset ~1TB)
+python scripts/download_waymo.py --output-dir data/waymo --subset full
 ```
+
+**Presets:**
+| Preset | Training | Validation | Testing | Est. Size |
+|--------|----------|------------|---------|-----------|
+| tiny | 30 | 15 | 5 | ~5GB |
+| small | 70 | 20 | 10 | ~10GB |
+| medium | 500 | 150 | 50 | ~70GB |
+| large | 700 | 150 | 50 | ~100GB |
+| full | All | All | All | ~1TB |
 
 **Note**: You need a Google Cloud account with Waymo Open Dataset access. See [Waymo Open Dataset](https://waymo.com/open/) for registration.
 
