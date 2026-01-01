@@ -430,7 +430,7 @@ def project_to_image(
 
 def get_future_waypoints_from_poses(
     current_pose: np.ndarray,
-    future_poses: np.ndarray,
+    future_poses,
     num_waypoints: int = 10,
 ) -> np.ndarray:
     """
@@ -438,7 +438,7 @@ def get_future_waypoints_from_poses(
     
     Args:
         current_pose: (4, 4) current vehicle pose (world frame)
-        future_poses: (T, 4, 4) future vehicle poses (world frame)
+        future_poses: List of (4, 4) or (T, 4, 4) future vehicle poses (world frame)
         num_waypoints: Number of waypoints to extract
         
     Returns:
@@ -446,6 +446,10 @@ def get_future_waypoints_from_poses(
     """
     if len(future_poses) == 0:
         return np.zeros((num_waypoints, 2), dtype=np.float32)
+    
+    # Convert list to numpy array if needed
+    if isinstance(future_poses, list):
+        future_poses = np.stack(future_poses, axis=0)
     
     # Get inverse of current pose to transform to local frame
     current_pose_inv = np.linalg.inv(current_pose)

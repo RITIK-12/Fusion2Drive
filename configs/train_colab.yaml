@@ -48,7 +48,8 @@ loss:
 # Logging
 log_dir: /content/outputs/train
 tensorboard: true
-wandb: false
+wandb: true  # Enable wandb logging
+wandb_project: fusion2drive
 
 # Debug
 debug: false

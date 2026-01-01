@@ -7,7 +7,7 @@ import time
 import logging
 from pathlib import Path
 from typing import Dict, Optional, Any, List
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import torch
 import torch.nn as nn
@@ -65,6 +65,11 @@ class TrainerConfig:
     
     # Seed
     seed: int = 42
+    
+    # Wandb
+    use_wandb: bool = False
+    wandb_project: str = "fusion2drive"
+    wandb_run_name: Optional[str] = None
 
 
 class Trainer:
@@ -161,6 +166,28 @@ class Trainer:
         self.log_dir = Path(self.config.log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.writer = SummaryWriter(self.log_dir)
+        
+        # Wandb
+        self.use_wandb = self.config.use_wandb
+        if self.use_wandb:
+            try:
+                import wandb
+                wandb.init(
+                    project=self.config.wandb_project,
+                    name=self.config.wandb_run_name,
+                    config={
+                        "learning_rate": self.config.learning_rate,
+                        "weight_decay": self.config.weight_decay,
+                        "max_epochs": self.config.max_epochs,
+                        "batch_size": self.config.batch_size,
+                        "grad_accum_steps": self.config.grad_accum_steps,
+                        "use_amp": self.config.use_amp,
+                    },
+                )
+                logger.info(f"Wandb initialized: {wandb.run.name}")
+            except ImportError:
+                logger.warning("Wandb not installed, disabling")
+                self.use_wandb = False
         
         # Checkpointing
         self.checkpoint_dir = Path(self.config.checkpoint_dir)
@@ -372,9 +399,14 @@ class Trainer:
         return result
     
     def _log_metrics(self, metrics: Dict[str, float], prefix: str):
-        """Log metrics to TensorBoard."""
+        """Log metrics to TensorBoard and Wandb."""
         for name, value in metrics.items():
             self.writer.add_scalar(f"{prefix}_epoch/{name}", value, self.epoch)
+        
+        # Wandb logging
+        if self.use_wandb:
+            import wandb
+            wandb.log({f"{prefix}/{k}": v for k, v in metrics.items()}, step=self.epoch)
         
         logger.info(f"Epoch {self.epoch} {prefix}: " + 
                     ", ".join(f"{k}={v:.4f}" for k, v in metrics.items()))

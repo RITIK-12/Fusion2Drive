@@ -49,8 +49,12 @@ def load_config(config_path: str) -> dict:
     return config
 
 
-def build_model(model_config: dict) -> FusionModel:
+def build_model(model_config: dict, data_config: dict) -> FusionModel:
     """Build model from configuration."""
+    # Get image size from data config (H, W format in config -> (W, H) for model)
+    image_size = tuple(data_config.get("image_size", [480, 640]))
+    camera_image_size = (image_size[1], image_size[0])  # Model expects (W, H)
+    
     config = FusionModelConfig(
         use_lidar=model_config.get("use_lidar", True),
         use_camera=model_config.get("use_camera", True),
@@ -58,6 +62,7 @@ def build_model(model_config: dict) -> FusionModel:
         lidar_out_channels=model_config.get("lidar_channels", 128),
         camera_out_channels=model_config.get("camera_channels", 128),
         camera_backbone=model_config.get("camera_backbone", "resnet18"),
+        camera_image_size=camera_image_size,
         bev_in_channels=model_config.get("bev_channels", 256),
         bev_hidden_channels=model_config.get("bev_channels", 256),
         bev_out_channels=model_config.get("bev_channels", 256),
@@ -138,7 +143,7 @@ def main():
     
     # Build model
     logger.info("Building model...")
-    model = build_model(config.get("model", {}))
+    model = build_model(config.get("model", {}), config["data"])
     
     # Log model info
     num_params = sum(p.numel() for p in model.parameters())
@@ -166,6 +171,9 @@ def main():
             log_dir=log_dir,
             detection_weight=loss_config.get("detection_weight", 1.0),
             planning_weight=loss_config.get("planning_weight", 1.0),
+            use_wandb=config.get("wandb", False),
+            wandb_project=config.get("wandb_project", "fusion2drive"),
+            wandb_run_name=config.get("wandb_run_name"),
         ),
         model=model,
         train_loader=datamodule.train_dataloader(),

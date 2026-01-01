@@ -439,6 +439,9 @@ class WaymoDataset(Dataset):
         segment_id = frame_info["segment_id"]
         timestamp = frame_info["timestamp"]
         
+        # Target image size (height, width)
+        target_h, target_w = self.config.image_size
+        
         # Load camera images
         images = []
         intrinsics = []
@@ -451,8 +454,22 @@ class WaymoDataset(Dataset):
                 timestamp,
                 self.CAMERA_NAMES[camera_name],
             )
-            images.append(cam_data["image"])
-            intrinsics.append(cam_data["intrinsic"])
+            img = cam_data["image"]
+            intrinsic = cam_data["intrinsic"].copy()
+            
+            # Resize image if needed
+            if img.shape[0] != target_h or img.shape[1] != target_w:
+                import cv2
+                orig_h, orig_w = img.shape[:2]
+                img = cv2.resize(img, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
+                # Adjust intrinsics for resize
+                scale_x = target_w / orig_w
+                scale_y = target_h / orig_h
+                intrinsic[0, :] *= scale_x  # fx, cx
+                intrinsic[1, :] *= scale_y  # fy, cy
+            
+            images.append(img)
+            intrinsics.append(intrinsic)
             extrinsics.append(cam_data["extrinsic"])
         
         # Load LiDAR points
