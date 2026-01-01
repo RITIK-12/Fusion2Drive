@@ -458,7 +458,6 @@ Note: Requires gsutil with Waymo dataset access.
     
     if errors_occurred:
         logger.warning("\nSome splits failed to download. See errors above.")
-            logger.info(f"Completed {split}: {downloaded} files")
     
     # Save download info
     info_file = output_dir / "download_info.txt"
