@@ -151,34 +151,33 @@ def main():
     
     # Build trainer
     trainer_config = config.get("trainer", {})
+    loss_config = config.get("loss", {})
     trainer = Trainer(
         config=TrainerConfig(
             max_epochs=trainer_config.get("max_epochs", 50),
             learning_rate=trainer_config.get("learning_rate", 1e-4),
             weight_decay=trainer_config.get("weight_decay", 0.01),
-            gradient_accumulation_steps=trainer_config.get("gradient_accumulation_steps", 1),
-            mixed_precision=trainer_config.get("mixed_precision", True),
-            clip_grad_norm=trainer_config.get("clip_grad_norm", 1.0),
+            grad_accum_steps=trainer_config.get("gradient_accumulation_steps", 1),
+            use_amp=trainer_config.get("mixed_precision", True),
             warmup_epochs=trainer_config.get("warmup_epochs", 5),
-            log_interval=trainer_config.get("log_interval", 100),
-            save_interval=trainer_config.get("save_interval", 1),
+            log_every_n_steps=trainer_config.get("log_interval", 100),
+            save_every_n_epochs=trainer_config.get("save_interval", 1),
             checkpoint_dir=trainer_config.get("checkpoint_dir", "checkpoints"),
             log_dir=log_dir,
+            detection_weight=loss_config.get("detection_weight", 1.0),
+            planning_weight=loss_config.get("planning_weight", 1.0),
         ),
         model=model,
-        train_dataloader=datamodule.train_dataloader(),
-        val_dataloader=datamodule.val_dataloader(),
+        train_loader=datamodule.train_dataloader(),
+        val_loader=datamodule.val_dataloader(),
         device=device,
     )
     
-    # Resume from checkpoint if specified
+    # Train (with optional resume)
+    logger.info("Starting training...")
     if args.resume:
         logger.info(f"Resuming from checkpoint: {args.resume}")
-        trainer.load_checkpoint(args.resume)
-    
-    # Train
-    logger.info("Starting training...")
-    trainer.train()
+    trainer.train(resume_from=args.resume)
     
     logger.info("Training complete!")
 

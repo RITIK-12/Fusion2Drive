@@ -1,0 +1,55 @@
+# Fusion2Drive Training Configuration - Colab (T4/L4 GPU)
+# Optimized for Google Colab with 15GB GPU RAM
+
+# Data configuration
+data:
+  data_dir: /content/waymo_data  # Local Colab storage (copied from Drive)
+  cache_dir: /content/cache      # Local cache directory
+  batch_size: 2                  # Conservative for T4 GPU
+  num_workers: 2                 # Colab has limited CPU cores
+  image_size: [256, 704]         # H, W
+  max_points: 100000             # Reduced for memory
+  augment: true
+
+# Model configuration (optimized for T4/L4)
+model:
+  use_lidar: true
+  use_camera: true
+  lidar_channels: 64
+  camera_channels: 64
+  camera_backbone: efficientnet_b0  # Efficient backbone
+  bev_channels: 256
+  bev_size: [200, 200]           # 0.5m resolution, 100m x 100m
+  bev_expand_ratio: 4.0
+  bev_se_ratio: 0.25
+  num_classes: 3                 # vehicle, pedestrian, cyclist
+  num_waypoints: 12              # 6 seconds at 2 Hz
+  dropout: 0.1
+
+# Training configuration
+trainer:
+  max_epochs: 20
+  learning_rate: 2.0e-4
+  weight_decay: 0.01
+  gradient_accumulation_steps: 8  # Effective batch size = 16
+  mixed_precision: true           # Use AMP for memory efficiency
+  clip_grad_norm: 1.0
+  warmup_epochs: 2
+  log_interval: 50
+  save_interval: 1
+  checkpoint_dir: /content/checkpoints
+
+# Loss weights
+loss:
+  detection_weight: 1.0
+  planning_weight: 1.0
+  use_uncertainty_weighting: false
+
+# Logging
+log_dir: /content/outputs/train
+tensorboard: true
+wandb: false
+
+# Debug
+debug: false
+profile: false
