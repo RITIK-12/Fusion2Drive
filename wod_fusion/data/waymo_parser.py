@@ -151,40 +151,164 @@ class WaymoFrameParser:
         segment_id: str,
         timestamp: int,
     ) -> np.ndarray:
-        """Load LiDAR from Parquet format."""
+        """
+        Load LiDAR point cloud from Waymo v2 Parquet format.
+        
+        Waymo v2 stores LiDAR data with files named: {segment_id}.parquet
+        Columns include:
+        - key.frame_timestamp_micros: timestamp
+        - key.laser_name: which LiDAR sensor (1=TOP, 2-5=side LiDARs)
+        - [LiDARComponent].range_image_return1.values: range image data
+        """
         import pyarrow.parquet as pq
         
         lidar_dir = data_dir / "lidar"
+        if not lidar_dir.exists():
+            raise ValueError(
+                f"LiDAR directory not found: {lidar_dir}. "
+                "Ensure you downloaded the 'lidar' component."
+            )
+        
         all_points = []
         
-        for pq_file in lidar_dir.glob(f"*{segment_id}*.parquet"):
-            table = pq.read_table(pq_file)
-            mask = table["key.frame_timestamp_micros"].to_pandas() == timestamp
+        # Find the parquet file for this segment
+        # File is named: {segment_id}.parquet
+        segment_file = lidar_dir / f"{segment_id}.parquet"
+        
+        if not segment_file.exists():
+            # Try to find by pattern match
+            matching_files = list(lidar_dir.glob(f"*{segment_id}*.parquet"))
+            if not matching_files:
+                raise ValueError(
+                    f"No LiDAR file found for segment {segment_id} in {lidar_dir}"
+                )
+            segment_file = matching_files[0]
+        
+        try:
+            # Read the parquet file
+            table = pq.read_table(segment_file)
+            columns = [f.name for f in table.schema]
             
-            if mask.any():
-                # Get range image data
-                for idx in mask[mask].index:
-                    try:
-                        # Get range image and convert to points
-                        range_image = table["[LiDARComponent].range_image_return1.values"][idx].as_py()
-                        # Parse range image (simplified - actual parsing is more complex)
-                        if range_image:
-                            # This is a simplified version - actual implementation needs
-                            # proper range image to point cloud conversion
-                            points = np.frombuffer(range_image, dtype=np.float32).reshape(-1, 4)
-                            all_points.append(points)
-                    except Exception as e:
-                        logger.debug(f"Could not parse LiDAR data: {e}")
+            # Get timestamp column
+            if "key.frame_timestamp_micros" not in columns:
+                raise ValueError(f"No timestamp column in {segment_file.name}")
+            
+            timestamps = table["key.frame_timestamp_micros"].to_pandas()
+            mask = timestamps == timestamp
+            
+            if not mask.any():
+                raise ValueError(
+                    f"Timestamp {timestamp} not found in {segment_file.name}. "
+                    f"Available: {sorted(timestamps.unique())[:5]}..."
+                )
+            
+            # Find range image columns
+            range_col = None
+            for col in columns:
+                if "range_image_return1.values" in col:
+                    range_col = col
+                    break
+            
+            if range_col is None:
+                # Try alternative: look for any values column
+                for col in columns:
+                    if ".values" in col.lower():
+                        range_col = col
+                        break
+            
+            if range_col is None:
+                logger.warning(f"No range image column found. Columns: {columns[:10]}")
+                raise ValueError(f"No range image data in {segment_file.name}")
+            
+            # Process matching rows (one per LiDAR sensor per frame)
+            for idx in mask[mask].index:
+                try:
+                    range_data = table[range_col][idx].as_py()
+                    
+                    if range_data is None or len(range_data) == 0:
                         continue
+                    
+                    # Convert range image to points
+                    points = self._range_image_to_points(range_data)
+                    if points is not None and len(points) > 0:
+                        all_points.append(points)
+                        
+                except Exception as e:
+                    logger.debug(f"Could not parse LiDAR row {idx}: {e}")
+                    continue
+                    
+        except Exception as e:
+            logger.error(f"Could not read {segment_file}: {e}")
+            raise
         
         if all_points:
-            return np.concatenate(all_points, axis=0)
+            combined = np.concatenate(all_points, axis=0)
+            logger.debug(f"Loaded {len(combined)} LiDAR points for {segment_id}")
+            return combined
         else:
-            # Raise error if no LiDAR points found - do not use synthetic data
             raise ValueError(
                 f"No LiDAR points found for segment {segment_id}, timestamp {timestamp}. "
-                "Ensure the LiDAR data is properly downloaded and the Parquet files are not corrupted."
+                f"File: {segment_file.name}"
             )
+    
+    def _range_image_to_points(
+        self,
+        range_data: Union[list, bytes],
+    ) -> Optional[np.ndarray]:
+        """
+        Convert Waymo range image data to 3D point cloud.
+        
+        The range image encodes: range, intensity, elongation, (x, y, z in vehicle frame)
+        For Waymo v2, the data may be pre-computed Cartesian coordinates.
+        """
+        try:
+            if isinstance(range_data, bytes):
+                # Binary data - decode as float32
+                arr = np.frombuffer(range_data, dtype=np.float32)
+            elif isinstance(range_data, (list, tuple)):
+                arr = np.array(range_data, dtype=np.float32)
+            else:
+                return None
+            
+            if len(arr) == 0:
+                return None
+            
+            # Common case: data is [N, 4] or [N, 6] with (x, y, z, intensity, ...)
+            if arr.ndim == 1:
+                # Try common formats
+                if len(arr) % 4 == 0:
+                    arr = arr.reshape(-1, 4)
+                elif len(arr) % 6 == 0:
+                    arr = arr.reshape(-1, 6)
+                elif len(arr) % 3 == 0:
+                    arr = arr.reshape(-1, 3)
+                else:
+                    return None
+            
+            if arr.ndim != 2:
+                # Flatten to 2D if needed
+                if arr.ndim > 2:
+                    arr = arr.reshape(-1, arr.shape[-1])
+            
+            if arr.shape[1] < 3:
+                return None
+            
+            # Extract x, y, z (and intensity if available)
+            if arr.shape[1] >= 4:
+                # Filter out invalid points (range = 0 or -1)
+                valid_mask = (arr[:, 0] != 0) & (arr[:, 0] != -1)
+                points = arr[valid_mask, :4]  # x, y, z, intensity
+            else:
+                valid_mask = (arr[:, 0] != 0) & (arr[:, 0] != -1)
+                xyz = arr[valid_mask, :3]
+                intensity = np.ones((len(xyz), 1), dtype=np.float32)
+                points = np.concatenate([xyz, intensity], axis=1)
+            
+            return points if len(points) > 0 else None
+            
+        except Exception as e:
+            logger.debug(f"Range image conversion failed: {e}")
+            return None
     
     def load_ego_pose(
         self,

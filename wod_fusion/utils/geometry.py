@@ -426,3 +426,48 @@ def project_to_image(
     valid_mask = valid_mask & in_bounds
     
     return points_2d, valid_mask
+
+
+def get_future_waypoints_from_poses(
+    current_pose: np.ndarray,
+    future_poses: np.ndarray,
+    num_waypoints: int = 10,
+) -> np.ndarray:
+    """
+    Extract future waypoints from vehicle poses in local frame.
+    
+    Args:
+        current_pose: (4, 4) current vehicle pose (world frame)
+        future_poses: (T, 4, 4) future vehicle poses (world frame)
+        num_waypoints: Number of waypoints to extract
+        
+    Returns:
+        waypoints: (num_waypoints, 2) XY waypoints in current vehicle frame
+    """
+    if len(future_poses) == 0:
+        return np.zeros((num_waypoints, 2), dtype=np.float32)
+    
+    # Get inverse of current pose to transform to local frame
+    current_pose_inv = np.linalg.inv(current_pose)
+    
+    # Extract future positions (translation component)
+    future_positions_world = future_poses[:, :3, 3]  # (T, 3)
+    
+    # Transform to current vehicle frame
+    ones = np.ones((len(future_positions_world), 1))
+    future_positions_homo = np.concatenate([future_positions_world, ones], axis=1)  # (T, 4)
+    future_positions_local = (current_pose_inv @ future_positions_homo.T).T[:, :2]  # (T, 2)
+    
+    # Interpolate or pad to get desired number of waypoints
+    if len(future_positions_local) >= num_waypoints:
+        # Sample evenly spaced waypoints
+        indices = np.linspace(0, len(future_positions_local) - 1, num_waypoints, dtype=int)
+        waypoints = future_positions_local[indices]
+    else:
+        # Pad with last position
+        waypoints = np.zeros((num_waypoints, 2), dtype=np.float32)
+        waypoints[:len(future_positions_local)] = future_positions_local
+        if len(future_positions_local) > 0:
+            waypoints[len(future_positions_local):] = future_positions_local[-1]
+    
+    return waypoints.astype(np.float32)

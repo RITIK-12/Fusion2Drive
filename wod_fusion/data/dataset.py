@@ -239,25 +239,45 @@ class WaymoDataset(Dataset):
         self, 
         max_segments: Optional[int] = None
     ) -> List[Dict[str, Any]]:
-        """Build index from Parquet format (v2.0.1)."""
+        """
+        Build index from Waymo v2 Parquet format.
+        
+        Waymo v2 parquet files are named by segment context:
+        - {segment_context_name}.parquet
+        - e.g., 15832924468527961_1564_160_1584_160.parquet
+        
+        Each file contains data for one segment with columns including:
+        - key.segment_context_name: full segment identifier  
+        - key.frame_timestamp_micros: frame timestamp
+        """
         import pyarrow.parquet as pq
         
         frame_index = []
+        
+        # Try camera_image first, then lidar
         camera_dir = self.data_dir / self.split / "camera_image"
+        lidar_dir = self.data_dir / self.split / "lidar"
         
-        # Get unique segment IDs
-        segment_files = sorted(camera_dir.glob("*.parquet"))
-        segments = set()
+        source_dir = camera_dir if camera_dir.exists() else lidar_dir
+        if not source_dir.exists():
+            logger.warning(f"No camera_image or lidar directory found in {self.data_dir / self.split}")
+            return frame_index
         
-        for pq_file in segment_files:
-            # Parse segment ID from filename
-            # Format: camera_image_{segment_id}_{shard}.parquet
-            parts = pq_file.stem.split("_")
-            if len(parts) >= 3:
-                segment_id = "_".join(parts[2:-1])
-                segments.add(segment_id)
+        # Get parquet files - the filename IS the segment ID
+        parquet_files = sorted(source_dir.glob("*.parquet"))
         
-        segments = sorted(list(segments))
+        # Filter out metadata files
+        parquet_files = [f for f in parquet_files if not f.name.startswith("_")]
+        
+        segments = []
+        for pq_file in parquet_files:
+            # The segment ID is the filename without extension
+            segment_id = pq_file.stem
+            segments.append(segment_id)
+        
+        # Remove duplicates and sort
+        segments = sorted(set(segments))
+        
         if max_segments:
             segments = segments[:max_segments]
         
@@ -265,24 +285,34 @@ class WaymoDataset(Dataset):
         
         # Build frame index for each segment
         for segment_id in segments:
-            # Get frame count from camera_image table
-            segment_frames = []
-            for pq_file in camera_dir.glob(f"*{segment_id}*.parquet"):
-                table = pq.read_table(pq_file, columns=["key.frame_timestamp_micros"])
-                timestamps = table["key.frame_timestamp_micros"].to_pylist()
-                segment_frames.extend(timestamps)
+            # Find the parquet file for this segment
+            segment_file = source_dir / f"{segment_id}.parquet"
             
-            unique_timestamps = sorted(set(segment_frames))
+            if not segment_file.exists():
+                # Try glob matching
+                matching = list(source_dir.glob(f"*{segment_id}*.parquet"))
+                if matching:
+                    segment_file = matching[0]
+                else:
+                    continue
             
-            for idx, timestamp in enumerate(unique_timestamps):
-                cache_path = self.cache_dir / f"{segment_id}_{timestamp}.pt"
-                frame_index.append({
-                    "segment_id": segment_id,
-                    "frame_idx": idx,
-                    "timestamp": timestamp,
-                    "cache_path": str(cache_path),
-                    "cached": cache_path.exists(),
-                })
+            try:
+                # Read timestamps from the parquet file
+                table = pq.read_table(segment_file, columns=["key.frame_timestamp_micros"])
+                timestamps = sorted(set(table["key.frame_timestamp_micros"].to_pylist()))
+                
+                for idx, timestamp in enumerate(timestamps):
+                    cache_path = self.cache_dir / f"{segment_id}_{timestamp}.pt"
+                    frame_index.append({
+                        "segment_id": segment_id,
+                        "frame_idx": idx,
+                        "timestamp": timestamp,
+                        "cache_path": str(cache_path),
+                        "cached": cache_path.exists(),
+                    })
+            except Exception as e:
+                logger.warning(f"Could not read {segment_file.name}: {e}")
+                continue
         
         return frame_index
     

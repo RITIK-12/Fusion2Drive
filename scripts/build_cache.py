@@ -6,8 +6,8 @@ This script preprocesses the Waymo dataset and builds a cache
 for faster training iteration.
 
 Usage:
-    python scripts/build_cache.py --data_dir /data/waymo --cache_dir /data/waymo_cache
-    python scripts/build_cache.py --data_dir /data/waymo --cache_dir /data/waymo_cache --split training
+    python scripts/build_cache.py --data_dir data/waymo --cache_dir data/cache
+    python scripts/build_cache.py --data_dir data/waymo --cache_dir data/cache --split training
 """
 
 import argparse
@@ -19,6 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from wod_fusion.data import CacheBuilder
+from wod_fusion.data.cache import CacheConfig
 
 
 def setup_logging():
@@ -35,7 +36,7 @@ def main():
         "--data_dir",
         type=str,
         required=True,
-        help="Path to Waymo dataset",
+        help="Path to Waymo dataset root (containing training/, validation/)",
     )
     parser.add_argument(
         "--cache_dir",
@@ -83,30 +84,38 @@ def main():
     logger.info(f"Data directory: {args.data_dir}")
     logger.info(f"Cache directory: {args.cache_dir}")
     
-    # Create cache builder
-    builder = CacheBuilder(
-        data_dir=args.data_dir,
-        cache_dir=args.cache_dir,
-        image_size=tuple(args.image_size),
-        max_points=args.max_points,
-        num_workers=args.num_workers,
-    )
-    
-    # Determine splits
+    # Determine splits to process
     splits = ["training", "validation"] if args.split == "all" else [args.split]
     
     for split in splits:
-        logger.info(f"\nBuilding cache for {split}...")
+        logger.info(f"\nProcessing {split} split...")
         
-        cache_path = Path(args.cache_dir) / split
+        input_dir = Path(args.data_dir) / split
+        output_dir = Path(args.cache_dir) / split
         
-        if cache_path.exists() and not args.force:
-            logger.info(f"Cache already exists: {cache_path}")
+        if not input_dir.exists():
+            logger.warning(f"Split directory not found: {input_dir}")
+            continue
+        
+        if output_dir.exists() and not args.force:
+            logger.info(f"Cache already exists: {output_dir}")
             logger.info("Use --force to rebuild")
             continue
         
-        builder.build(split=split)
+        # Create config and builder for this split
+        config = CacheConfig(
+            image_size=tuple(args.image_size),
+            max_points=args.max_points,
+            num_workers=args.num_workers,
+        )
         
+        builder = CacheBuilder(
+            input_dir=str(input_dir),
+            output_dir=str(output_dir),
+            config=config,
+        )
+        
+        builder.build()
         logger.info(f"Completed {split}")
     
     logger.info("\nCache build complete!")
