@@ -220,6 +220,10 @@ class FusionModel(nn.Module):
         batch_size = images.shape[0] if images is not None else points.shape[0]
         device = images.device if images is not None else points.device
         
+        # Compute target BEV size
+        target_bev_h = int((self.config.bev_y_range[1] - self.config.bev_y_range[0]) / self.config.bev_resolution)
+        target_bev_w = int((self.config.bev_x_range[1] - self.config.bev_x_range[0]) / self.config.bev_resolution)
+        
         # Encode modalities
         bev_features_list = []
         
@@ -231,6 +235,11 @@ class FusionModel(nn.Module):
                 )
             else:
                 lidar_bev = self.lidar_encoder(points, points_mask)
+            # Resize LiDAR BEV to target size if needed
+            if lidar_bev.shape[2] != target_bev_h or lidar_bev.shape[3] != target_bev_w:
+                lidar_bev = nn.functional.interpolate(
+                    lidar_bev, size=(target_bev_h, target_bev_w), mode='bilinear', align_corners=False
+                )
             bev_features_list.append(lidar_bev)
         
         if self.config.use_camera and images is not None:
@@ -241,6 +250,11 @@ class FusionModel(nn.Module):
                 )
             else:
                 camera_bev = self.camera_encoder(images, intrinsics, extrinsics)
+            # Resize camera BEV to target size if needed
+            if camera_bev.shape[2] != target_bev_h or camera_bev.shape[3] != target_bev_w:
+                camera_bev = nn.functional.interpolate(
+                    camera_bev, size=(target_bev_h, target_bev_w), mode='bilinear', align_corners=False
+                )
             bev_features_list.append(camera_bev)
         
         # Fuse BEV features
