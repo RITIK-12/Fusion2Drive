@@ -488,7 +488,7 @@ class WaymoDataset(Dataset):
         waypoints = get_future_waypoints_from_poses(
             ego_pose,
             future_poses,
-            horizons=np.arange(1, self.config.num_future_frames + 1) * self.config.frame_interval,
+            num_waypoints=self.config.num_future_frames,
         )
         
         return {
